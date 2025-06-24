@@ -5,3 +5,5 @@ gensim
 uvicorn
 sqlite-utils
 pandas
+psycopg2-binary
+pydantic
