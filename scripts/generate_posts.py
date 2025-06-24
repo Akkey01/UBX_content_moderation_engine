@@ -5,9 +5,15 @@ import pandas as pd
 from datetime import datetime, timedelta
 import uuid
 import os
+import argparse
+import logging
 from collections import Counter
+from typing import List, Dict, Optional
 
 class FinanceContentGenerator:
+    """
+    Generates synthetic finance-related posts for content moderation testing.
+    """
     def __init__(self):
         self.finance_topics = {
             "trading": [
@@ -144,7 +150,7 @@ class FinanceContentGenerator:
             "severe_violation": {"severity": 3, "action": "block"}
         }
 
-    def generate_safe_post(self):
+    def generate_safe_post(self) -> Dict:
         topic = random.choice(list(self.finance_topics.keys()))
         detail = random.choice(self.finance_topics[topic])
         template = random.choice(self.safe_templates)
@@ -172,7 +178,7 @@ class FinanceContentGenerator:
             "timestamp": self._random_timestamp()
         }
 
-    def generate_mild_violation_post(self):
+    def generate_mild_violation_post(self) -> Dict:
         template = random.choice(self.mild_violations)
         content = self._fill_template(template)
         problem_users = [u for u in self.user_personas if u["style"] in ["aggressive", "promotional"]]
@@ -187,7 +193,7 @@ class FinanceContentGenerator:
             "timestamp": self._random_timestamp()
         }
 
-    def generate_moderate_violation_post(self):
+    def generate_moderate_violation_post(self) -> Dict:
         template = random.choice(self.moderate_violations)
         content = self._fill_template(template)
         deceptive_users = [u for u in self.user_personas if u["style"] in ["deceptive", "manipulative"]]
@@ -202,7 +208,7 @@ class FinanceContentGenerator:
             "timestamp": self._random_timestamp()
         }
 
-    def generate_severe_violation_post(self):
+    def generate_severe_violation_post(self) -> Dict:
         template = random.choice(self.severe_violations)
         content = self._fill_template(template)
         criminal_users = [u for u in self.user_personas if u["style"] == "deceptive"]
@@ -217,14 +223,14 @@ class FinanceContentGenerator:
             "timestamp": self._random_timestamp()
         }
 
-    def _fill_template(self, template):
+    def _fill_template(self, template: str) -> str:
         content = template
         for placeholder, options in self.replacement_terms.items():
             if f"{{{placeholder}}}" in content:
                 content = content.replace(f"{{{placeholder}}}", random.choice(options))
         return content
 
-    def _random_timestamp(self):
+    def _random_timestamp(self) -> str:
         now = datetime.now()
         days_ago = random.randint(0, 30)
         hours_ago = random.randint(0, 23)
@@ -232,7 +238,14 @@ class FinanceContentGenerator:
         timestamp = now - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
         return timestamp.isoformat()
 
-    def generate_dataset(self, total_posts=200, safe_ratio=0.5, mild_ratio=0.25, moderate_ratio=0.15, severe_ratio=0.1):
+    def generate_dataset(
+        self,
+        total_posts: int = 200,
+        safe_ratio: float = 0.5,
+        mild_ratio: float = 0.25,
+        moderate_ratio: float = 0.15,
+        severe_ratio: float = 0.1
+    ) -> List[Dict]:
         if not abs(safe_ratio + mild_ratio + moderate_ratio + severe_ratio - 1.0) < 0.01:
             raise ValueError("Ratios must sum to 1.0")
         dataset = []
@@ -251,21 +264,35 @@ class FinanceContentGenerator:
         random.shuffle(dataset)
         return dataset
 
-    def save_dataset(self, dataset, format_type="json", outdir="data"):
+    def save_dataset(
+        self,
+        dataset: List[Dict],
+        format_type: str = "json",
+        outdir: str = "data",
+        overwrite: bool = False
+    ) -> Optional[str]:
         os.makedirs(outdir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if format_type.lower() == "json":
             filename = os.path.join(outdir, f"finance_content_dataset_{timestamp}.json")
+        elif format_type.lower() == "csv":
+            filename = os.path.join(outdir, f"finance_content_dataset_{timestamp}.csv")
+        else:
+            logging.error(f"Unknown format: {format_type}")
+            return None
+        if os.path.exists(filename) and not overwrite:
+            logging.warning(f"File {filename} already exists. Use --overwrite to replace.")
+            return None
+        if format_type.lower() == "json":
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(dataset, f, indent=2, ensure_ascii=False)
         elif format_type.lower() == "csv":
-            filename = os.path.join(outdir, f"finance_content_dataset_{timestamp}.csv")
             df = pd.json_normalize(dataset)
             df.to_csv(filename, index=False, encoding='utf-8')
-        print(f" Dataset saved to: {filename}")
+        logging.info(f"Dataset saved to: {filename}")
         return filename
 
-    def generate_statistics(self, dataset):
+    def generate_statistics(self, dataset: List[Dict]) -> Dict:
         stats = {
             "total_posts": len(dataset),
             "category_distribution": Counter(post["category"] for post in dataset),
@@ -275,30 +302,38 @@ class FinanceContentGenerator:
         return stats
 
 def main():
-    print("=" * 70)
-    print(" SMART CONTENT MODERATION ENGINE - FINANCE FEED GENERATOR")
-    print("=" * 70)
-    random.seed(42)
+    parser = argparse.ArgumentParser(description="Generate synthetic finance content posts.")
+    parser.add_argument('--total-posts', type=int, default=200, help='Total number of posts to generate (default: 200)')
+    parser.add_argument('--safe-ratio', type=float, default=0.5, help='Ratio of safe posts (default: 0.5)')
+    parser.add_argument('--mild-ratio', type=float, default=0.25, help='Ratio of mild violation posts (default: 0.25)')
+    parser.add_argument('--moderate-ratio', type=float, default=0.15, help='Ratio of moderate violation posts (default: 0.15)')
+    parser.add_argument('--severe-ratio', type=float, default=0.1, help='Ratio of severe violation posts (default: 0.1)')
+    parser.add_argument('--outdir', type=str, default='data', help='Output directory (default: data)')
+    parser.add_argument('--formats', type=str, nargs='+', default=['json', 'csv'], choices=['json', 'csv'], help='Output formats (default: json csv)')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
+    parser.add_argument('--overwrite', action='store_true', help='Overwrite output files if they exist')
+    parser.add_argument('--loglevel', type=str, default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help='Logging level (default: INFO)')
+    args = parser.parse_args()
+
+    logging.basicConfig(level=getattr(logging, args.loglevel), format='[%(levelname)s] %(message)s')
+
+    logging.info("SMART CONTENT MODERATION ENGINE - FINANCE FEED GENERATOR")
+    random.seed(args.seed)
     generator = FinanceContentGenerator()
-    print("\n Generating synthetic finance content dataset...")
+    logging.info(f"Generating {args.total_posts} posts (safe: {args.safe_ratio}, mild: {args.mild_ratio}, moderate: {args.moderate_ratio}, severe: {args.severe_ratio})")
     dataset = generator.generate_dataset(
-        total_posts=200,
-        safe_ratio=0.50,
-        mild_ratio=0.25,
-        moderate_ratio=0.15,
-        severe_ratio=0.10
+        total_posts=args.total_posts,
+        safe_ratio=args.safe_ratio,
+        mild_ratio=args.mild_ratio,
+        moderate_ratio=args.moderate_ratio,
+        severe_ratio=args.severe_ratio
     )
-    print(f"\n Generated {len(dataset)} posts successfully!")
-    print("\n Saving datasets...")
-    json_file = generator.save_dataset(dataset, "json", outdir="data")
-    csv_file = generator.save_dataset(dataset, "csv", outdir="data")
+    logging.info(f"Generated {len(dataset)} posts successfully!")
+    for fmt in args.formats:
+        generator.save_dataset(dataset, fmt, outdir=args.outdir, overwrite=args.overwrite)
     stats = generator.generate_statistics(dataset)
-    print(f"\n Dataset Statistics:")
-    print(f"Total Posts: {stats['total_posts']}")
-    print(f"Categories: {dict(stats['category_distribution'])}")
-    print(f"Severities: {dict(stats['severity_distribution'])}")
-    print(f"\n Dataset generation complete!")
-    print(f" Files saved: {json_file}, {csv_file}")
+    logging.info(f"Dataset Statistics: Total Posts: {stats['total_posts']}, Categories: {dict(stats['category_distribution'])}, Severities: {dict(stats['severity_distribution'])}")
+    logging.info("Dataset generation complete!")
 
 if __name__ == "__main__":
     main() 

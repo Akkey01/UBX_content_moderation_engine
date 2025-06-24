@@ -1,0 +1,13 @@
+# Python virtual environment
+venv/
+
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Data outputs (keep data/ dir, ignore generated files)
+data/*.csv
+data/*.json 
