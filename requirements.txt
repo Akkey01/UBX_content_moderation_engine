@@ -1,0 +1,7 @@
+fastapi
+scikit-learn
+transformers
+gensim
+uvicorn
+sqlite-utils
+pandas
